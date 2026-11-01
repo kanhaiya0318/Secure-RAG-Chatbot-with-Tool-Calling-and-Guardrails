@@ -27,6 +27,7 @@ async def chat_stream(
         db[session_id] = {"summary":"", "history":[]}
 
     return StreamingResponse(
-        reply(db[session_id], message, llm_service, rag),
+        reply(db[session_id], message, llm_service, rag, 
+            langsmith_extra={"metadata": {"session_id": session_id}}),
         media_type="text/plain",
     )

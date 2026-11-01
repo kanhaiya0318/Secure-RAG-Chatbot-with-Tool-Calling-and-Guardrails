@@ -1,8 +1,14 @@
-from typing import Literal
 import httpx
+from typing import Literal
+from langsmith import traceable
+
 from app.config import settings
 from app.utils.timing import logger
+from app.guardrails import wrap_untrusted, UNTRUSTED_NOTICE
 
+
+def _drop_object(inputs:dict)->dict:
+    return {k:v for k,v in inputs.items() if k not in ("rag", "client")}
 
 SEARCH_WEB_DECLARATION = {
     "name" : "WebSearch",
@@ -27,6 +33,8 @@ SEARCH_WEB_DECLARATION = {
         "required": ["query"]
     },
 }
+
+@traceable(name="WebSearch", run_type="tool", process_inputs=_drop_object)
 async def WebSearch(
         query: str, 
         client: httpx.AsyncClient, 
@@ -53,12 +61,11 @@ async def WebSearch(
         for i in response_json["results"][:3]:
             result = {"url": i.get("url", ""),
                     "title": i.get("title",""),
-                    "content":i.get("content", "")[:300],
+                    "content":wrap_untrusted(i.get("content", "")[:300]),
                     "published_date": i.get("published_date", "")
             }
             results.append(result)
-        logger.info(f"response of Websearch: {results}")
-        return {"results":results}
+        return {"notice": UNTRUSTED_NOTICE, "results": results}
     except Exception as e:
         logger.error(f"Web Search Faild {e}")
         return {"error":"Could not search the web right now."}
@@ -82,7 +89,7 @@ SEARCH_DOCS_DECLARATION = {
     },
 }
 
-
+@traceable(name="SearchDocs", run_type="tool", process_inputs=_drop_object)
 async def SearchDocs(query:str, rag, k:int = 2):
     try:
         docs = await rag.aretrieve(query, k=k)
@@ -94,12 +101,13 @@ async def SearchDocs(query:str, rag, k:int = 2):
         return {"results": [], "note": "No relevant passages found in the uploaded documents."}
 
     return {
+        "notice": UNTRUSTED_NOTICE,
         "results": [
             {
                 "source": d.metadata.get("source", ""),
                 "page": d.metadata.get("page_number"),
                 "score": round(float(d.metadata.get("score", 0)), 4),
-                "text": d.page_content,
+                "text": wrap_untrusted(d.page_content),
             }
             for d in docs
         ]

@@ -1,7 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import time
 import httpx
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+
 from app.utils.timing import logger
 from app.routers.sessions import router as session_router
 from app.routers.chat import router as chat_router
