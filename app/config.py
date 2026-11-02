@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     MAX_DOCUMENTS : int = 20
     MAX_FILENAME_CHARS : int = 80
 
+    #answer cache
+    ANSWER_CACHE_ENABLED : bool = True
+    ANSWER_CACHE_MAX_ENTRIES : int = 200
+    ANSWER_CACHE_TTL_SECONDS : int = 3600
+
     model_config = SettingsConfigDict(
         env_file = ".env",
         env_file_encoding = "utf-8",

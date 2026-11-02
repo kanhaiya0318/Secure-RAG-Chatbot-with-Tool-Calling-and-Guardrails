@@ -1,15 +1,17 @@
+import logging
 from langsmith import traceable
 
+from app.cache import answer_cache
 from app.services.llm_service import LLMService
 from app.services.memory_service import compress
 from app.config import settings
-from app.utils.timing import timer, logger
+from app.utils.timing import timer
 from app.guardrails import (
     OutputFilter, LEAK_MESSAGE, check_chunk, collect_sources, sources_footer,
 )
-
 from app.services.tools import SearchDocs, WebSearch   # add WebSearch
 
+logger = logging.getLogger(__name__)
 
 async def run_tool_calls(parts: list, rag, client) -> list:
     response_parts = []
@@ -51,6 +53,21 @@ async def run_tool_calls(parts: list, rag, client) -> list:
         reduce_fn=lambda chunks: "".join(chunks),            # join streamed text into one output
 )
 async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
+    first_turn = not db["history"] and not db["summary"]
+
+    # cache hit: no Gemini call, no tools
+    if settings.ANSWER_CACHE_ENABLED and first_turn:
+        cached = answer_cache.get(prompt)
+        if cached is not None:
+            logger.info(f"Answer cache hit (hits={answer_cache.hits}, misses={answer_cache.misses})")
+            db["history"].append({"role": "user", "parts": [{"text": prompt}]})
+            db["history"].append({"role": "model", "parts": [{"text": cached}]})
+            yield cached
+            return
+        logger.info(f"Answer cache miss (hits={answer_cache.hits}, misses={answer_cache.misses})")
+    elif settings.ANSWER_CACHE_ENABLED:
+        logger.info("Answer cache skipped: not the first message of this session")
+
     db["history"].append({"role": "user", "parts": [{"text": prompt}]})
 
     with timer("Compress : "):
@@ -58,6 +75,8 @@ async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
 
     turn_start = len(db["history"]) - 1
     sources = []
+    tools_used = set()
+    cacheable = True
 
     for i in range(settings.RETRY_LLM_CALL):
         out_filter = OutputFilter()
@@ -70,7 +89,7 @@ async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
                 if blocked:
                     reason, message = blocked
                     logger.warning(f"Gemini blocked the turn: {reason}")
-                    del db["history"][turn_start:] # drop the whole turn
+                    del db["history"][turn_start:]
                     yield message
                     return
 
@@ -111,9 +130,23 @@ async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
             footer = sources_footer(sources, text)
             if footer:
                 yield footer
+
+            store = (settings.ANSWER_CACHE_ENABLED and first_turn and cacheable
+                     and tools_used == {"SearchDocs"} and bool(text))
+            logger.info(
+                f"Answer cache store={store} (first_turn={first_turn}, "
+                f"cacheable={cacheable}, tools_used={sorted(tools_used)})"
+            )
+            if store:
+                answer_cache.set(prompt, text + footer)
             return
 
         response_parts = await run_tool_calls(parts, rag, llm_service.client)
+        for p in response_parts:
+            fr = p["functionResponse"]
+            tools_used.add(fr["name"])
+            if "error" in (fr.get("response") or {}):
+                cacheable = False
         sources += collect_sources(response_parts)
         db["history"].append({"role": "user", "parts": response_parts})
 

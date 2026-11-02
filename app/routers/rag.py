@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 
+from app.cache import answer_cache
 from app.config import settings
 from app.limits import upload_limiter, client_ip
 from app.dependancies import get_rag_pipeline
@@ -55,9 +56,12 @@ async def upload(
         path = Path(tmp) / "upload.pdf"
         path.write_bytes(data)
         try:
-            return await rag.aingest(path, source_name=name)
+            result = await rag.aingest(path, source_name=name)
         except ValueError as e:
             raise HTTPException(422, str(e))
+    if not getattr(result, "skipped", False):
+        answer_cache.clear()
+    return result
 
 
 @router.get("/documents", response_model=list[DocumentOut])
@@ -69,4 +73,5 @@ async def list_documents(rag: RAGPipeline=Depends(get_rag_pipeline)):
 async def delete_document(doc_id: str, rag: RAGPipeline = Depends(get_rag_pipeline)):
     if not rag.delete_document(doc_id):
         raise HTTPException(404, "Document not found")
+    answer_cache.clear()
     return DeleteOut(doc_id=doc_id, deleted=True)
