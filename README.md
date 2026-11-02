@@ -1,4 +1,4 @@
-# FastAPI RAG ChatBot
+# Secure RAG Chatbot with Tool Calling and Guardrails
 
 A document-aware chatbot backend built with **FastAPI**, the **Gemini API** (called directly over `httpx`) and **ChromaDB**. Upload PDFs and ask questions: the model decides when to search your documents or the web, and answers with the source and page. It includes streaming replies, conversation memory, layered guardrails, LangSmith tracing, and a **Streamlit** chat UI.
 
