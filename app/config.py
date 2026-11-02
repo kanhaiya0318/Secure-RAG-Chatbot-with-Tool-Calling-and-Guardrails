@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     KEEP_LAST : int = 4
 
     #web search
-    SEARCH_DEPTH : Literal["advanced", "ultra-fast", "fast", "basic"] = "ultra-fast"
+    SEARCH_DEPTH : Literal["advanced", "ultra-fast", "fast", "basic"] = "advanced"
     SEARCH_MAX_RESULTS: int = 5 
     TAVILY_API_KEY : str
 

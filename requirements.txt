@@ -1,10 +1,21 @@
-fastapi
+# Python 3.12+
+
+# API server
 fastapi[standard]
-uvicorn
-pydantic-settings
-streamlit
-httpx
-pandas
-pymupdf
-chromadb==1.5.9
+uvicorn[standard]
 python-multipart
+pydantic-settings
+python-dotenv
+httpx
+
+# RAG
+chromadb==1.5.9
+pymupdf
+numpy
+
+# Observability
+langsmith
+
+# UI
+streamlit
+requests

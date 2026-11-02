@@ -60,7 +60,7 @@ async def WebSearch(
                 "include_images": False,
                 "topic": "general",
                 "country": "india",
-            "search_depth": "advanced",
+            "search_depth": settings.SEARCH_DEPTH,
             }
         logger.info(f"response of Websearch: {payload}")
         header={"Authorization": f"Bearer {settings.TAVILY_API_KEY}"}
