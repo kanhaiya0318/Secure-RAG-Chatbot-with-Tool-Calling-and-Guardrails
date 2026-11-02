@@ -1,7 +1,8 @@
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 
+from app.limits import upload_limiter, client_ip
 from app.dependancies import get_rag_pipeline
 from app.rag.pipeline import RAGPipeline
 from app.schemas.rag import DeleteOut, DocumentOut, UploadOut
@@ -13,7 +14,8 @@ MAX_UPLOAD_MB = 20
 
 
 @router.post("/upload", response_model=UploadOut)
-async def upload(file: UploadFile = File(...), rag:RAGPipeline = Depends(get_rag_pipeline)):
+async def upload(request: Request, file: UploadFile = File(...), rag:RAGPipeline = Depends(get_rag_pipeline)):
+    upload_limiter.hit(client_ip(request))
     name = Path(file.filename or "").name
     if not name.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported")

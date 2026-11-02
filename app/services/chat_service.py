@@ -9,16 +9,20 @@ from app.guardrails import check_chunk
 from app.services.tools import SearchDocs, WebSearch   # add WebSearch
 
 
-async def run_tool_calls(parts: list, rag, client) -> list:   # add client
+async def run_tool_calls(parts: list, rag, client) -> list:
     response_parts = []
+    calls_run = 0
     for part in parts:
         call = part.get("functionCall")
         if not call:
             continue
         name = call.get("name", "")
         args = call.get("args", {})
+        calls_run += 1
 
-        if name == "SearchDocs":
+        if calls_run > settings.MAX_TOOL_CALLS_PER_TURN:
+            result = {"error": "Too many tool calls in one turn. Answer with what you already have."}
+        elif name == "SearchDocs":
             with timer("SearchDocs : "):
                 result = await SearchDocs(args.get("query", ""), rag)
         elif name == "WebSearch":

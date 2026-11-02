@@ -43,6 +43,10 @@ async def WebSearch(
     ):
     try:
         url = "https://api.tavily.com/search"
+        query = str(query or "").strip()[: settings.MAX_QUERY_CHARS]
+        if not query:
+            return {"error": "Empty search query."}
+
         payload={"query": query,
                 "max_results" : settings.SEARCH_MAX_RESULTS,
                 "time_range": time_range,
@@ -91,6 +95,9 @@ SEARCH_DOCS_DECLARATION = {
 
 @traceable(name="SearchDocs", run_type="tool", process_inputs=_drop_object)
 async def SearchDocs(query:str, rag, k:int = 2):
+    query = str(query or "").strip()[: settings.MAX_QUERY_CHARS]
+    if not query:
+        return {"error": "Empty search query."}
     try:
         docs = await rag.aretrieve(query, k=k)
     except Exception as e:

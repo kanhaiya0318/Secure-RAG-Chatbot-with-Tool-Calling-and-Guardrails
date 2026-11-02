@@ -21,6 +21,22 @@ class Settings(BaseSettings):
     OUTPUT_DIM : int = 1024
     BATCH_SIZE : int = 1
 
+    #limits(Guardrails)
+    CHAT_PER_MIN_IP : int = 30
+    CHAT_PER_MIN_SESSION : int = 10
+    UPLOADS_PER_10MIN : int = 5
+    MAX_SESSIONS : int = 200
+    SESSION_TTL_SECONDS : int = 3600
+    MAX_TOOL_CALLS_PER_TURN : int = 3
+    MAX_QUERY_CHARS : int = 300
+
+    #uploads(Guardrails)
+    MAX_UPLOAD_MB : int = 20
+    MAX_PDF_PAGES : int = 100
+    MAX_CHUNKS_PER_DOC : int = 800
+    MAX_DOCUMENTS : int = 20
+    MAX_FILENAME_CHARS : int = 80
+
     model_config = SettingsConfigDict(
         env_file = ".env",
         env_file_encoding = "utf-8",

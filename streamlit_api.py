@@ -52,12 +52,15 @@ def chat_stream(session_id: str, prompt: str):
             for piece in resp.iter_content(chunk_size = None ,decode_unicode=True):
                 if piece:
                     yield piece
-    except requests.ConnectionError:
-        yield "⚠️ Can't reach the backend. Is uvicorn running on port 8000?"
     except requests.HTTPError as e:
-        yield f"⚠️ Backend error ({e.response.status_code})"
-    except requests.RequestException as e:
-        yield f"⚠️ Request failed: {e}"
+        code = e.response.status_code
+        if code == 429:
+            wait = e.response.headers.get("Retry-After", "a few")
+            yield f"⏳ Too many requests. Please wait {wait} seconds."
+        elif code == 503:
+            yield "⚠️ The server is busy. Please try again later."
+        else:
+            yield f"⚠️ Backend error ({code})"
 
 
 def fetch_documents():
