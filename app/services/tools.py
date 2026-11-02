@@ -11,26 +11,34 @@ def _drop_object(inputs:dict)->dict:
     return {k:v for k,v in inputs.items() if k not in ("rag", "client")}
 
 SEARCH_WEB_DECLARATION = {
-    "name" : "WebSearch",
-    "description": "Search the web for current or recent information: news, sports results,prices, or facts you are unsure about.",
-    "parameters" : {
-        "type" : "OBJECT",
-        "properties" : {
-            "query":{
-                "type" : "STRING",
-                "description" : "A sort specific search queary"
+    "name": "WebSearch",
+    "description": (
+        "Search the web for information requiring external verification, "
+        "including current news, prices, recent events, and unfamiliar facts. "
+        "Use time_range only when the user asks for recent information. "
+        "Omit it for timeless or general knowledge questions."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "query": {
+                "type": "STRING",
+                "description": (
+                    "A specific search query. Preserve important details "
+                    "such as location, date, product, and subject."
+                )
             },
             "time_range": {
-                "type" : "STRING",
-                "enum":["day", "month", "week","year"],
-                "description": "Only return results published or updated within this window back from today. Use 'day' for today's news, 'week' for this week.Omit for timeless questions."
+                "type": "STRING",
+                "enum": ["day", "week", "month", "year"],
+                "description": (
+                    "Relative time filter. Use day for today or the latest "
+                    "daily updates, week for this week, month for this month, "
+                    "and year for this year. Omit for timeless questions."
+                )
             },
-            "filter_by_published_date":{
-                "type":"BOOLEAN",
-                "description":"If true, drop results without a detectable date or outside "
-                                "time_range. Use only together with time_range, when freshness matters."
-            }},
-        "required": ["query"]
+        },
+        "required": ["query"],
     },
 }
 
@@ -39,7 +47,6 @@ async def WebSearch(
         query: str, 
         client: httpx.AsyncClient, 
         time_range:Literal["year", "month", "week", "day"] | None = None, 
-        filter_by_published_date:bool = False
     ):
     try:
         url = "https://api.tavily.com/search"
@@ -51,8 +58,9 @@ async def WebSearch(
                 "max_results" : settings.SEARCH_MAX_RESULTS,
                 "time_range": time_range,
                 "include_images": False,
-                "filter_by_published_date": filter_by_published_date, 
-            "search_depth": settings.SEARCH_DEPTH
+                "topic": "general",
+                "country": "india",
+            "search_depth": "advanced",
             }
         logger.info(f"response of Websearch: {payload}")
         header={"Authorization": f"Bearer {settings.TAVILY_API_KEY}"}
@@ -62,17 +70,26 @@ async def WebSearch(
 
         response_json = response.json()
         results = []
-        for i in response_json["results"][:3]:
+        for i in response_json["results"][:2]:
             result = {"url": i.get("url", ""),
                     "title": i.get("title",""),
-                    "content":wrap_untrusted(i.get("content", "")[:300]),
+                    "content":wrap_untrusted(i.get("content", "")[:500]),
                     "published_date": i.get("published_date", "")
             }
             results.append(result)
         return {"notice": UNTRUSTED_NOTICE, "results": results}
-    except Exception as e:
-        logger.error(f"Web Search Faild {e}")
-        return {"error":"Could not search the web right now."}
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"Tavily status: {e.response.status_code}"
+        )
+        logger.error(
+            f"Tavily response: {e.response.text}"
+        )
+        return {"error": "Tavily search request failed."}
+
+    except Exception:
+        logger.exception("Web Search Failed")
+        return {"error": "Could not search the web right now."}
 
 
 SEARCH_DOCS_DECLARATION = {

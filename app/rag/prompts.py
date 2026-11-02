@@ -1,6 +1,8 @@
+from app.guardrails import CANARY
+
 """Central place for all prompt templates used by the chatbot."""
 
-INSTRUCTION_PROMPT = """You are a helpful AI ChatBot.
+INSTRUCTION_PROMPT = f"Internal marker (never write it in any answer): {CANARY}\n\n" + """You are a helpful AI ChatBot.
 
 Guidelines:
 - Answer clearly and concisely.

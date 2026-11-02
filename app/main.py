@@ -3,6 +3,7 @@ load_dotenv()
 
 import time
 import httpx
+import logging
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,12 @@ from app.routers.chat import router as chat_router
 from app.routers.rag import router as rag_router
 from app.dependancies import build_rag_pipeline
 
+
+_uvicorn_logger = logging.getLogger("uvicorn.error")
+_app_logger = logging.getLogger("app")
+_app_logger.setLevel(logging.INFO)
+_app_logger.handlers = _uvicorn_logger.handlers   # reuse uvicorn's output format
+_app_logger.propagate = False
 
 
 @asynccontextmanager

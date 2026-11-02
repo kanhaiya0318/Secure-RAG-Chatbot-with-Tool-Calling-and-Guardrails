@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     CHUNK_SIZE : int = 700
     CHUNK_OVERLAP : int = 100
     OUTPUT_DIM : int = 1024
-    BATCH_SIZE : int = 1
+    BATCH_SIZE : int = 10
 
     #limits(Guardrails)
     CHAT_PER_MIN_IP : int = 30

@@ -4,7 +4,9 @@ from app.services.llm_service import LLMService
 from app.services.memory_service import compress
 from app.config import settings
 from app.utils.timing import timer, logger
-from app.guardrails import check_chunk
+from app.guardrails import (
+    OutputFilter, LEAK_MESSAGE, check_chunk, collect_sources, sources_footer,
+)
 
 from app.services.tools import SearchDocs, WebSearch   # add WebSearch
 
@@ -31,7 +33,6 @@ async def run_tool_calls(parts: list, rag, client) -> list:
                     args.get("query", ""),
                     client,
                     time_range=args.get("time_range"),
-                    filter_by_published_date=args.get("filter_by_published_date", False),
                 )
         else:
             result = {"error": "Unknown function name"}
@@ -55,10 +56,12 @@ async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
     with timer("Compress : "):
         await compress(db, llm_service)
 
-    turn_start = len(db["history"]) - 1    # index of this turn's user message
+    turn_start = len(db["history"]) - 1
+    sources = []
 
     for i in range(settings.RETRY_LLM_CALL):
-        text_buf, other_parts = "", []
+        out_filter = OutputFilter()
+        shown, other_parts = [], []
         try:
             async for chunk in llm_service.generate_content_stream(
                 db["history"], db["summary"]
@@ -70,29 +73,48 @@ async def reply(db: dict, prompt: str, llm_service: LLMService, rag):
                     del db["history"][turn_start:] # drop the whole turn
                     yield message
                     return
-                
+
                 if "candidates" not in chunk:
                     continue
                 parts = chunk["candidates"][0].get("content", {}).get("parts", [])
 
                 for part in parts:
                     if "text" in part:
-                        text_buf += part.get("text", "")
-                        yield part["text"]
+                        safe = out_filter.feed(part["text"])
+                        if safe:
+                            shown.append(safe)
+                            yield safe
                     else:
                         other_parts.append(part)
+                if out_filter.leaked:
+                    break
         except Exception as e:
             logger.error(f"Gemini stream failed: {e}")
             yield "\n[error: could not get a response from the model]"
             return
 
-        parts = ([{"text": text_buf}] if text_buf else []) + other_parts
+        tail = out_filter.flush()
+        if out_filter.leaked:
+            logger.warning("System prompt marker found in model output; reply stopped")
+            del db["history"][turn_start:]
+            yield LEAK_MESSAGE
+            return
+        if tail:
+            shown.append(tail)
+            yield tail
+
+        text = "".join(shown)
+        parts = ([{"text": text}] if text else []) + other_parts
         db["history"].append({"role": "model", "parts": parts})
 
         if not any("functionCall" in p for p in parts):
+            footer = sources_footer(sources, text)
+            if footer:
+                yield footer
             return
 
         response_parts = await run_tool_calls(parts, rag, llm_service.client)
+        sources += collect_sources(response_parts)
         db["history"].append({"role": "user", "parts": response_parts})
 
     yield "\n[error: the model used too many tool turns without a final answer]"

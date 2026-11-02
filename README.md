@@ -2,6 +2,25 @@
 
 A document-aware chatbot backend built with **FastAPI**, the **Gemini API** (called directly over `httpx`) and **ChromaDB**. Upload PDFs, then ask questions: the model decides when to search your documents and answers with the source and page. Includes streaming replies, conversation memory (sliding window + rolling summary) and a **Streamlit** chat UI.
 
+## What stands out
+
+1. **Layered guardrails.** Five layers go beyond "it answers questions": prompt-injection handling (retrieved text is wrapped as untrusted data), Gemini safety-block handling that keeps the chat history valid, rate and cost limits, hardened PDF uploads, and output checks (secret redaction, system-prompt leak detection, source line on document answers). *See `app/guardrails.py`, `app/limits.py`, `app/rag/validation.py`.*
+2. **Failure-mode engineering.** History trimming never separates a tool call from its response, a blocked turn is removed so it cannot poison later messages, and every tool call gets a response even when the per-turn cap is hit. *See `app/services/memory_service.py`, `app/services/chat_service.py`.*
+3. **No framework glue.** A direct Gemini REST client, a hand-written tool-calling loop, and a self-contained RAG package (loader, splitter, embeddings, vector store, retriever, pipeline) with a one-way dependency direction. *See `app/rag/`.*
+4. **Observability.** Every chat turn is traced in LangSmith, with each model call and tool call as its own span, plus request and step timing logs.
+5. **Engineering hygiene.** Typed settings loaded from `.env`, typed request and response schemas, content-hash deduplication of uploads, secrets kept out of the repository, and documented known limitations.
+
+## Pending (future work)
+
+- [ ] **Evaluation:** build a question set from sample documents and report retrieval recall@k and answer faithfulness, then compare chunk sizes and `k` using those numbers instead of guesses.
+- [ ] **Automated tests and CI:** turn `test_guardrails.py` into a pytest suite (guardrails, splitter, memory logic) and run it on every push.
+- [ ] **Deployment:** Dockerfile, a hosted demo link, and a short demo video.
+- [ ] **Persistent sessions:** move sessions and history from memory to a database or Redis, which also lets rate limits work across several workers.
+- [ ] **Caching:**
+  - [ ] Cache query embeddings, so repeated questions skip the embedding API call
+  - [ ] Cache `WebSearch` results with a short expiry
+  - [ ] Cache answers to identical document questions, keyed by the document set and the normalized question, and clear them when a document is uploaded or deleted
+
 ## Features
 
 - **RAG over PDFs**: PyMuPDF loader, text cleaning, recursive splitter, Gemini embeddings, Chroma vector store
