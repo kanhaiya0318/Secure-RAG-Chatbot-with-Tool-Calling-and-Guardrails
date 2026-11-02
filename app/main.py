@@ -46,7 +46,6 @@ async def timing_middleware(request, call_next):
     response = await call_next(request)
     ms = (time.perf_counter() - start)*1000
     response.headers["X-Process-Time-ms"] = f"{ms:.0f}"
-    logger.info(f"[Time] {request.method} {request.url.path} total: {ms:.0f} ms")
     return response
 
 @app.get("/")
